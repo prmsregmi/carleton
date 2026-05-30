@@ -72,6 +72,25 @@ const KIND_CONFIG: Record<EventKind, { icon: string; textColor: string; bgColor:
   action:     { icon: "✓",  textColor: "text-emerald-400", bgColor: "bg-emerald-950/40" },
 };
 
+// Bot display name comes from the backend (MEETING_BOT_NAME env, default "Onion").
+// Cached at module scope so it's fetched once and shared across components.
+let _botNameCache = "Onion";
+function useBotName() {
+  const [name, setName] = useState(_botNameCache);
+  useEffect(() => {
+    fetch("http://localhost:8000/api/config")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.bot_name) {
+          _botNameCache = d.bot_name;
+          setName(d.bot_name);
+        }
+      })
+      .catch(() => {});
+  }, []);
+  return name;
+}
+
 // ── Primitives ─────────────────────────────────────────────────────────────────
 
 function Pip({ state }: { state: BotState }) {
@@ -99,6 +118,7 @@ function JoinModal({ onClose, onJoined }: { onClose: () => void; onJoined: (id: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const ref = useRef<HTMLInputElement>(null);
+  const botName = useBotName();
 
   useEffect(() => { ref.current?.focus(); }, []);
 
@@ -145,7 +165,7 @@ function JoinModal({ onClose, onJoined }: { onClose: () => void; onJoined: (id: 
           <div className="mt-4 flex items-start gap-3 bg-sky-950/40 border border-sky-900/50 rounded-xl px-4 py-3">
             <span className="text-sky-400 mt-0.5 shrink-0">ℹ</span>
             <p className="text-[12px] text-sky-300 leading-relaxed">
-              After clicking <strong className="text-sky-200">Add to meeting</strong>, go to <strong className="text-sky-200">People → Waiting</strong> in Meet and admit <strong className="text-sky-200">"Aria Notetaker"</strong>.
+              After clicking <strong className="text-sky-200">Add to meeting</strong>, go to <strong className="text-sky-200">People → Waiting</strong> in Meet and admit <strong className="text-sky-200">"{botName}"</strong>.
             </p>
           </div>
         </div>
@@ -285,6 +305,7 @@ function MeetingDetail({
   onJoin: () => void;
 }) {
   const [tab, setTab] = useState<"transcript" | "activity" | "actions">("transcript");
+  const botName = useBotName();
   const [, setTick] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -334,7 +355,7 @@ function MeetingDetail({
         <div className="shrink-0 mx-5 mt-4 flex items-center gap-3 bg-sky-950/50 border border-sky-800/60 rounded-xl px-4 py-3">
           <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse shrink-0" />
           <p className="text-[13px] text-sky-300">
-            Aria is in the lobby — go to <strong className="text-sky-200">People → Waiting</strong> in Meet and click <strong className="text-sky-200">Admit</strong>.
+            {botName} is in the lobby — go to <strong className="text-sky-200">People → Waiting</strong> in Meet and click <strong className="text-sky-200">Admit</strong>.
           </p>
         </div>
       )}
@@ -369,7 +390,7 @@ function MeetingDetail({
                   <span className="w-2.5 h-2.5 rounded-full bg-zinc-600 animate-pulse" />
                 </div>
                 <p className="text-[14px] text-zinc-500">
-                  {meeting.state === "waiting" ? "Admit Aria from the lobby to start capturing audio." : "Aria is listening…"}
+                  {meeting.state === "waiting" ? `Admit ${botName} from the lobby to start capturing audio.` : `${botName} is listening…`}
                 </p>
               </div>
             ) : (

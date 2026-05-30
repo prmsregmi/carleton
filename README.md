@@ -163,7 +163,7 @@ the meeting isn't wired yet — replies appear in the UI.)
 
 ```bash
 # server/.env
-MEETING_WAKE_NAMES=ginjoly,ginny
+MEETING_WAKE_NAMES=onion
 JIRA_MCP_URL=...    JIRA_MCP_TOKEN=...     # same shape for SLACK_ and GMAIL_
 ```
 
@@ -185,7 +185,7 @@ npm run dev                                    # http://localhost:3000
 ```
 
 **4. Open [http://localhost:3000](http://localhost:3000)** — paste a Google Meet link → click **Join
-meeting** → a Chrome window opens and the bot joins as **"Aria Notetaker"** → admit it from Meet's waiting
+meeting** → a Chrome window opens and the bot joins as **"Onion"** → admit it from Meet's waiting
 room → transcript and replies appear live.
 
 ---

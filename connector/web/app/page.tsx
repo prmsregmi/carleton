@@ -17,6 +17,17 @@ interface GlobalEvent {
   ts: string; // ISO
 }
 
+interface ExtractionTask {
+  text: string;
+  status: "pending" | "done";
+}
+
+interface Extraction {
+  context: string;
+  open_tasks: ExtractionTask[];
+  preference_candidates: string[];
+}
+
 interface Meeting {
   meeting_id: string;
   url: string;
@@ -26,13 +37,16 @@ interface Meeting {
   transcript: string[];
   actions: { label: string; detail: string }[];
   statusHistory: string[];
+  extraction?: Extraction | null;
 }
 
 type WsEvent =
   | { type: "meetings"; meetings: Omit<Meeting, "transcript" | "actions" | "statusHistory">[] }
   | { type: "status";     meeting_id: string; message: string; state: BotState }
   | { type: "transcript"; meeting_id: string; text: string }
-  | { type: "action";     meeting_id: string; label: string; detail: string };
+  | { type: "action";     meeting_id: string; label: string; detail: string }
+  | { type: "assistant";  meeting_id: string; text: string }
+  | { type: "extraction"; meeting_id: string; extraction: Extraction };
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
 
@@ -304,10 +318,28 @@ function MeetingDetail({
   onBack: () => void;
   onJoin: () => void;
 }) {
-  const [tab, setTab] = useState<"transcript" | "activity" | "actions">("transcript");
+  const [tab, setTab] = useState<"transcript" | "tasks" | "activity" | "actions">("transcript");
   const botName = useBotName();
   const [, setTick] = useState(0);
+  const [runningTasks, setRunningTasks] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const tasks = meeting.extraction?.open_tasks ?? [];
+  const pendingTasks = tasks.filter((t) => t.status === "pending");
+
+  const runAllTasks = async () => {
+    if (runningTasks || pendingTasks.length === 0) return;
+    setRunningTasks(true);
+    try {
+      await fetch(`http://localhost:8000/api/meetings/${meeting.meeting_id}/run-tasks`, {
+        method: "POST",
+      });
+    } catch {
+      /* result + updated extraction arrive over the websocket */
+    } finally {
+      setRunningTasks(false);
+    }
+  };
 
   useEffect(() => {
     if (meeting.state !== "live") return;
@@ -361,7 +393,7 @@ function MeetingDetail({
       )}
 
       <div className="shrink-0 border-b border-white/[0.06] px-5 flex mt-1">
-        {(["transcript", "activity", "actions"] as const).map((t) => (
+        {(["transcript", "tasks", "activity", "actions"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -370,6 +402,9 @@ function MeetingDetail({
             }`}
           >
             {t}
+            {t === "tasks" && pendingTasks.length > 0 && (
+              <span className="ml-2 bg-amber-500/15 text-amber-400 text-[11px] rounded-md px-1.5 py-0.5 tabular-nums">{pendingTasks.length}</span>
+            )}
             {t === "actions" && meeting.actions.length > 0 && (
               <span className="ml-2 bg-white/[0.08] text-zinc-400 text-[11px] rounded-md px-1.5 py-0.5 tabular-nums">{meeting.actions.length}</span>
             )}
@@ -402,6 +437,54 @@ function MeetingDetail({
                   </div>
                 ))}
                 <div ref={bottomRef} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tasks — the rolling extraction's open work + batch runner */}
+        {tab === "tasks" && (
+          <div className="max-w-2xl mx-auto px-5 py-6">
+            {meeting.extraction?.context && (
+              <div className="mb-5 bg-[#0f0f12] border border-white/[0.07] rounded-xl px-4 py-3.5">
+                <div className="text-[11px] text-zinc-600 uppercase tracking-wider mb-1.5">Context</div>
+                <p className="text-[13px] text-zinc-300 leading-relaxed whitespace-pre-wrap">{meeting.extraction.context}</p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13px] text-zinc-400">
+                {tasks.length === 0 ? "No tasks yet" : `${pendingTasks.length} pending · ${tasks.length - pendingTasks.length} done`}
+              </span>
+              <button
+                onClick={runAllTasks}
+                disabled={runningTasks || pendingTasks.length === 0}
+                className="h-8 px-3.5 bg-white text-black text-[12px] font-semibold rounded-lg hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                {runningTasks ? "Running…" : `Do all tasks${pendingTasks.length ? ` (${pendingTasks.length})` : ""}`}
+              </button>
+            </div>
+
+            {tasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+                <p className="text-[14px] text-zinc-500">{botName} hasn’t captured any tasks yet</p>
+                <p className="text-[12px] text-zinc-700">Tasks people ask for show up here, and you can run them at the end</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {tasks.map((task, i) => {
+                  const done = task.status === "done";
+                  return (
+                    <div key={i} className="flex items-center gap-3 bg-[#0f0f12] border border-white/[0.07] rounded-xl px-4 py-3.5">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[11px] ${
+                        done ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" : "bg-amber-500/10 border border-amber-500/20 text-amber-400"
+                      }`}>
+                        {done ? "✓" : "○"}
+                      </div>
+                      <div className={`min-w-0 text-[13px] ${done ? "text-zinc-500 line-through" : "text-white"}`}>{task.text}</div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -693,6 +776,21 @@ export default function Home() {
             return { ...prev, [mid]: { ...m, actions: [...m.actions, { label: ev.label, detail: ev.detail }] } };
           });
           addEvent({ meeting_id: mid, kind: "action", text: ev.label, detail: ev.detail });
+        }
+
+        if (ev.type === "assistant") {
+          setMeetings((prev) => {
+            const m = prev[mid]; if (!m) return prev;
+            return { ...prev, [mid]: { ...m, actions: [...m.actions, { label: ev.text, detail: "" }] } };
+          });
+          addEvent({ meeting_id: mid, kind: "action", text: ev.text });
+        }
+
+        if (ev.type === "extraction") {
+          setMeetings((prev) => {
+            const m = prev[mid]; if (!m) return prev;
+            return { ...prev, [mid]: { ...m, extraction: ev.extraction } };
+          });
         }
       };
 

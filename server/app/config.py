@@ -3,7 +3,8 @@
 Every key is optional so the module imports cleanly even when a given
 integration is not configured yet; callers check for the specific key they
 need. Phase 1 voice requires DEEPGRAM/ANTHROPIC/CARTESIA; verification adds
-SCRAPINGDOG/GITHUB; eval adds CEKURA; Phase 2 memory adds SUPERMEMORY.
+SCRAPINGDOG/GITHUB; eval adds CEKURA; long-term memory writes to an Obsidian
+vault on disk (OBSIDIAN_VAULT_PATH, no key needed).
 """
 
 import uuid
@@ -59,8 +60,9 @@ class Settings(BaseSettings):
     # --- Transport (hosted demo) ---
     daily_api_key: str | None = None
 
-    # --- Phase 2 memory ---
-    supermemory_api_key: str | None = None
+    # --- Long-term memory (Obsidian vault on disk) ---
+    # Team best-practices note + per-meeting transcript archive are written here.
+    obsidian_vault_path: str = "./vault"
 
     # --- Behaviour knobs ---
     verify_timeout_secs: float = 20.0
@@ -71,8 +73,6 @@ class Settings(BaseSettings):
     meeting_wake_names: str = "onion"
     # Display name the Meet bot joins under; the web UI reads it via /api/config.
     meeting_bot_name: str = "Onion"
-    meeting_ws_host: str = "0.0.0.0"
-    meeting_ws_port: int = 7861
     # Mixed Google-Meet audio arrives as raw 16-bit PCM at this rate (mono);
     # the bot's TTS is sent back at the same rate for the Playwright bridge.
     meeting_sample_rate: int = 16000
@@ -81,13 +81,13 @@ class Settings(BaseSettings):
     meeting_playback_sample_rate: int = 48000
     # Speak a short ack ("On it.") while the MCP task runs in the background.
     meeting_speak_ack: bool = True
-    # Safety cap on un-summarized transcript lines held as the tail (the rolling
-    # summarizer normally drains these well before the cap is reached; oldest are
+    # Safety cap on un-extracted transcript lines held as the tail (the rolling
+    # extractor normally drains these well before the cap is reached; oldest are
     # dropped with a warning only if it falls behind).
     meeting_tail_max_lines: int = 200
-    # Rolling-summary memory: a cheap Haiku call folds the tail into a running
-    # summary on this interval, so the brain gets summary + fresh tail instead of
-    # the whole transcript. Set the interval to 0 to disable and use the raw tail.
+    # Rolling extraction: a cheap Haiku call folds the tail into a structured
+    # extraction on this interval, so the brain gets context + open tasks + fresh
+    # tail instead of the whole transcript. Set the interval to 0 to disable.
     meeting_summary_interval_secs: float = 300.0
     meeting_summary_model: str = "claude-haiku-4-5"
     # Discard transcriptions that echo the bot's own recent speech (mixed stream

@@ -12,7 +12,6 @@ dependencies = [
     "pipecatcloud",
     "playwright>=1.60.0",
     "pydantic-settings>=2.14.1",
-    "supermemory>=3.43.0",
     "uvicorn>=0.48.0",
 ]
 

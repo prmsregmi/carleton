@@ -75,6 +75,10 @@ async def join_meeting(req: JoinRequest):
         "started_at": datetime.now(UTC).isoformat(),
         "transcript": [],
         "actions": [],
+        # Latest rolling extraction (context + tasks) for the dashboard, and the
+        # live session the run-tasks endpoint drives the batch runner against.
+        "extraction": None,
+        "session": None,
     }
     asyncio.create_task(run_bot(mid, req.meeting_url))
     return {"meeting_id": mid}
@@ -88,6 +92,42 @@ async def list_meetings():
 @app.get("/api/config")
 async def get_config():
     return {"bot_name": get_settings().meeting_bot_name}
+
+
+@app.get("/api/meetings/{mid}/extraction")
+async def get_extraction(mid: str):
+    """Latest rolling extraction (context + tasks) so a freshly-connected dashboard
+    can render the current state without waiting for the next tick."""
+    m = meetings.get(mid)
+    if m is None:
+        return {"error": "unknown meeting"}
+    return {"meeting_id": mid, "extraction": m.get("extraction")}
+
+
+@app.post("/api/meetings/{mid}/run-tasks")
+async def run_tasks(mid: str):
+    """Passive path: execute every pending task through the SAME interface the wake
+    word uses (`app.meeting.brain.handle_request`) via the batch runner. Each result
+    is broadcast as it lands; the updated extraction is pushed at the end."""
+    m = meetings.get(mid)
+    if m is None:
+        return {"error": "unknown meeting"}
+    session = m.get("session")
+    if session is None:
+        return {"error": "meeting not live"}
+
+    from app.extraction.batch import run_pending_tasks
+    from app.meeting.brain import handle_request
+
+    async def on_result(task: str, result: str):
+        meetings[mid]["actions"].append(result)
+        await broadcast({"type": "assistant", "meeting_id": mid, "text": result})
+
+    results = await run_pending_tasks(session, handle_request, on_result=on_result)
+    data = session.extraction.model_dump()
+    meetings[mid]["extraction"] = data
+    await broadcast({"type": "extraction", "meeting_id": mid, "extraction": data})
+    return {"ran": len(results), "results": [{"task": t, "result": r} for t, r in results]}
 
 
 # ── MCP management ─────────────────────────────────────────────────────────────
@@ -176,6 +216,16 @@ async def run_bot(mid: str, meeting_url: str):
         meetings[mid]["actions"].append(text)
         await broadcast({"type": "assistant", "meeting_id": mid, "text": text})
 
+    async def on_extraction(extraction):
+        data = extraction.model_dump()
+        meetings[mid]["extraction"] = data
+        await broadcast({"type": "extraction", "meeting_id": mid, "extraction": data})
+
+    def on_session(session):
+        # Hold the live session so the run-tasks endpoint can drive the batch
+        # runner (context + mark-done) against the same state the gate mutates.
+        meetings[mid]["session"] = session
+
     from pipeline_bridge import run_meet_pipeline
 
     meet_task = asyncio.create_task(
@@ -189,7 +239,14 @@ async def run_bot(mid: str, meeting_url: str):
         )
     )
     pipeline_task = asyncio.create_task(
-        run_meet_pipeline(audio_queue, playback_queue, on_transcript, on_assistant)
+        run_meet_pipeline(
+            audio_queue,
+            playback_queue,
+            on_transcript,
+            on_assistant,
+            on_extraction,
+            on_session,
+        )
     )
 
     try:

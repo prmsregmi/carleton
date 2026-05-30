@@ -152,7 +152,8 @@ async def handle_request(request: str, transcript: str) -> str:
         setting_sources=[],  # don't load user/project/local settings or hooks
     )
     prompt = (
-        f"Meeting context (running summary, then the latest lines):\n{transcript or '(none)'}\n\n"
+        f"Meeting context (rolling extraction, open tasks, then the latest lines):\n"
+        f"{transcript or '(none)'}\n\n"
         f"The request just made to you: {request}\n\n"
         "Do it now with the available tools, then reply with one short spoken sentence."
     )

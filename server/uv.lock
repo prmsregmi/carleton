@@ -886,7 +886,6 @@ dependencies = [
     { name = "pipecatcloud" },
     { name = "playwright" },
     { name = "pydantic-settings" },
-    { name = "supermemory" },
     { name = "uvicorn" },
 ]
 
@@ -908,7 +907,6 @@ requires-dist = [
     { name = "pipecatcloud" },
     { name = "playwright", specifier = ">=1.60.0" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
-    { name = "supermemory", specifier = ">=3.43.0" },
     { name = "uvicorn", specifier = ">=0.48.0" },
 ]
 
@@ -3119,23 +3117,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c5/bf/616a066c2760f6c2b1ae3437cc28149734d069fbb46511712beae118a68c/starlette-1.2.0.tar.gz", hash = "sha256:3c5a6b23fff42492914e93890bb80cbfea72dbf37de268eec06185d62a4ca553", size = 2668923, upload-time = "2026-05-28T11:42:50.568Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/85/492183764d5d01d4514be3730fdb8e228a80605783099551c51627578b5d/starlette-1.2.0-py3-none-any.whl", hash = "sha256:36e0c76ac59157e75dc4b3bdeafba97fb04eaf1878045f15dbef666a6f092ed7", size = 73213, upload-time = "2026-05-28T11:42:48.801Z" },
-]
-
-[[package]]
-name = "supermemory"
-version = "3.43.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "distro" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "sniffio" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/34/d6/b4cec2ab7c5e084c644137d01e310dde3cc23f73c561b5659f1d79003b15/supermemory-3.43.0.tar.gz", hash = "sha256:b148f75bf02158243fbdd48a1500aba9db16b8475d0821ee20ef361748b58c2b", size = 172206, upload-time = "2026-05-22T01:29:11.61Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/33/3cb0197557b2f52d09ceec048b08ec98f672c5bf5fe6b19cd6971b7662e3/supermemory-3.43.0-py3-none-any.whl", hash = "sha256:6d15393b4f01d13893bd901dbb2596ce477b94065b78ee6c1aba29c5bfe3ac64", size = 153465, upload-time = "2026-05-22T01:29:10.304Z" },
 ]
 
 [[package]]

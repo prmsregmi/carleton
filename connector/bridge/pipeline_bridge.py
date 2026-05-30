@@ -141,12 +141,17 @@ async def run_meet_pipeline(
     playback_queue: asyncio.Queue | None = None,
     on_transcript=None,
     on_assistant=None,
+    on_extraction=None,
+    on_session=None,
 ):
     """Run the ginjoly meeting agent over audio coming from `audio_queue`.
 
     on_transcript(text) fires for every final transcription line; on_assistant(text)
-    fires with the bot's reply after it handles an addressed request. TTS audio is
-    forwarded onto `playback_queue` for the Playwright side to speak into the Meet.
+    fires with the bot's reply after it handles an addressed request;
+    on_extraction(extraction) fires after each rolling-extraction tick. on_session
+    is called once with the live MeetingSessionState so the caller can drive the
+    end-of-meeting batch runner against it. TTS audio is forwarded onto
+    `playback_queue` for the Playwright side to speak into the Meet.
     """
     from dotenv import load_dotenv
 
@@ -166,11 +171,14 @@ async def run_meet_pipeline(
         playback_state=playback_state,
     )
 
-    worker, _session = build_meeting_pipeline(
+    worker, session = build_meeting_pipeline(
         transport,
         on_transcript=on_transcript,
         on_assistant=on_assistant,
+        on_extraction=on_extraction,
     )
+    if on_session is not None:
+        on_session(session)
 
     runner = WorkerRunner(handle_sigint=False)
     await runner.add_workers(worker)

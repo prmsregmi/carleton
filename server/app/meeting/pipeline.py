@@ -30,12 +30,14 @@ def build_meeting_pipeline(
     *,
     on_transcript=None,
     on_assistant=None,
+    on_extraction=None,
 ) -> tuple[PipelineWorker, MeetingSessionState]:
     """Assemble the meeting pipeline for one bridge connection.
 
-    on_transcript(text) / on_assistant(text) are optional async callbacks the
-    gate fires so a UI (the meeting frontend) can render the live transcript and
-    the bot's replies. Leave them None for a headless run.
+    on_transcript(text) / on_assistant(text) / on_extraction(extraction) are
+    optional async callbacks the gate fires so a UI (the meeting frontend) can
+    render the live transcript, the bot's replies, and the rolling extraction
+    (context + tasks). Leave them None for a headless run.
     """
     settings = get_settings()
     session = MeetingSessionState(tail_cap=settings.meeting_tail_max_lines)
@@ -58,6 +60,7 @@ def build_meeting_pipeline(
         summary_interval=settings.meeting_summary_interval_secs,
         on_transcript=on_transcript,
         on_assistant=on_assistant,
+        on_extraction=on_extraction,
     )
 
     pipeline = Pipeline(

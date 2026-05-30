@@ -12,6 +12,7 @@ is the in-process backstop.
 """
 
 import asyncio
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 
 from loguru import logger
@@ -26,9 +27,14 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
+from app.extraction.memory import (
+    append_team_prefs,
+    load_team_prefs,
+    write_transcript_archive,
+)
+from app.extraction.rolling import extract
 from app.meeting.brain import handle_request
 from app.meeting.session import MeetingSessionState
-from app.meeting.summarizer import summarize
 
 _ECHO_RATIO = 0.8
 _STRIP = " ,.:;-—!?"
@@ -48,6 +54,7 @@ class WakeNameGate(FrameProcessor):
         summary_interval: float = 0.0,
         on_transcript=None,
         on_assistant=None,
+        on_extraction=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -55,14 +62,16 @@ class WakeNameGate(FrameProcessor):
         self._wake_names = [w.lower() for w in wake_names]
         self._speak_ack = speak_ack
         self._self_echo_filter = self_echo_filter
-        # >0 enables the rolling summarizer loop (folds the tail into the running
-        # summary every `summary_interval` seconds); 0 keeps the raw tail only.
+        # >0 enables the rolling extraction loop (folds the tail into the rolling
+        # extraction every `summary_interval` seconds); 0 keeps the raw tail only.
         self._summary_interval = summary_interval
         # Optional async callbacks to surface activity to a UI (the meeting
         # frontend): on_transcript(text) per final line, on_assistant(text) for
-        # the bot's reply. Both no-op when None.
+        # the bot's reply, on_extraction(extraction) after each rolling-extraction
+        # tick so the dashboard can render context + tasks. All no-op when None.
         self._on_transcript = on_transcript
         self._on_assistant = on_assistant
+        self._on_extraction = on_extraction
         self._bg_tasks: set[asyncio.Task] = set()
         self._summary_task: asyncio.Task | None = None
 
@@ -97,9 +106,10 @@ class WakeNameGate(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        # Start the rolling summarizer once the pipeline is live. Framework-managed
+        # Start the rolling extractor once the pipeline is live. Framework-managed
         # task (create_task) so Pipecat tracks and tears it down with the worker.
         if isinstance(frame, StartFrame):
+            self._seed_team_prefs()
             if self._summary_interval > 0 and self._summary_task is None:
                 self._summary_task = self.create_task(self._summary_loop())
             await self.push_frame(frame, direction)
@@ -139,24 +149,25 @@ class WakeNameGate(FrameProcessor):
         await self.push_frame(frame, direction)
 
     async def _summary_loop(self) -> None:
-        """Periodically fold the un-summarized tail into the running summary.
+        """Periodically fold the un-extracted tail into the rolling extraction.
 
-        Off the voice path: a cheap Haiku call (or keyless stub) compresses only
-        the NEW lines plus the prior summary, so the brain later reads a short
-        summary + fresh tail instead of the whole transcript. Snapshot the line
-        count BEFORE summarizing so lines arriving mid-call are never dropped.
+        Off the voice path: a cheap Haiku call (or keyless stub) processes only
+        the NEW lines plus the prior extraction, so the brain later reads a short
+        context + open tasks + fresh tail instead of the whole transcript. Snapshot
+        the line count BEFORE extracting so lines arriving mid-call are never dropped.
         """
         while True:
             await asyncio.sleep(self._summary_interval)
             new_lines, count = self._session.take_unsummarized()
             if count == 0:
                 continue
-            updated = await summarize(new_lines, self._session.running_summary)
+            updated = await extract(new_lines, self._session.extraction)
             if updated is None:
-                # Summary failed; keep the lines in the tail and retry next tick.
+                # Extraction failed; keep the lines in the tail and retry next tick.
                 continue
-            self._session.apply_summary(updated, count)
-            logger.debug(f"meeting summary updated from {count} line(s)")
+            self._session.apply_extraction(updated, count)
+            logger.debug(f"meeting extraction updated from {count} line(s)")
+            await self._notify(self._on_extraction, self._session.extraction)
 
     async def _dispatch(self, request: str) -> None:
         if self._speak_ack:
@@ -166,6 +177,9 @@ class WakeNameGate(FrameProcessor):
         async def _run():
             try:
                 summary = await handle_request(request, transcript)
+                # Flip a matching extracted task to done so the end-of-meeting
+                # batch runner doesn't re-execute what the wake word just did.
+                self._session.mark_task_done(request)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # never let a task failure kill the pipeline
@@ -180,11 +194,11 @@ class WakeNameGate(FrameProcessor):
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
 
-    async def _notify(self, cb, text: str) -> None:
+    async def _notify(self, cb, payload) -> None:
         if cb is None:
             return
         try:
-            await cb(text)
+            await cb(payload)
         except Exception as exc:  # a UI hiccup must never break the pipeline
             logger.debug(f"meeting notify failed: {exc!r}")
 
@@ -196,10 +210,39 @@ class WakeNameGate(FrameProcessor):
         if self._summary_task is not None:
             self._summary_task.cancel()
 
+    def _seed_team_prefs(self) -> None:
+        """Seed the rolling extraction with the team's learned best-practices so the
+        brain starts the meeting already knowing how the team works. Best-effort:
+        a vault read must never delay the pipeline going live."""
+        try:
+            prefs = load_team_prefs()
+        except Exception as exc:
+            logger.debug(f"meeting: team-prefs seed skipped: {exc!r}")
+            return
+        if prefs and not self._session.extraction.context:
+            self._session.extraction.context = f"Team best practices:\n{prefs}"
+
+    def _persist_memory(self) -> None:
+        """At meeting end: promote new preference candidates to the team note and
+        archive the raw transcript. Best-effort — never crash teardown."""
+        try:
+            append_team_prefs(self._session.extraction.preference_candidates)
+        except Exception as exc:
+            logger.warning(f"meeting: team-prefs append failed: {exc!r}")
+        try:
+            transcript = self._session.full_transcript()
+            if transcript.strip():
+                date = datetime.now(UTC).date().isoformat()
+                write_transcript_archive(date, self._session.call_id, transcript)
+        except Exception as exc:
+            logger.warning(f"meeting: transcript archive failed: {exc!r}")
+
     async def cleanup(self):
         self._cancel_bg_tasks()
+        # Persist long-term memory before teardown completes (off the voice path).
+        self._persist_memory()
         # Authoritative teardown: await the framework cancel so an in-flight
-        # summarize() HTTP call is actually torn down before the processor goes.
+        # extract() HTTP call is actually torn down before the processor goes.
         if self._summary_task is not None:
             await self.cancel_task(self._summary_task)
             self._summary_task = None

@@ -151,7 +151,20 @@ async def run_bot(mid: str, meeting_url: str):
     pipeline_task = asyncio.create_task(run_meet_pipeline(audio_queue, on_transcript, on_assistant))
 
     try:
-        await asyncio.gather(meet_task, pipeline_task)
+        # Wait for the first task to finish or raise; cancel the other so we never
+        # leak an orphaned Playwright process or a pipeline blocked on audio_queue.
+        done, pending = await asyncio.wait(
+            [meet_task, pipeline_task], return_when=asyncio.FIRST_COMPLETED
+        )
+        for t in pending:
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+        # Re-raise any exception from the finished task(s)
+        for t in done:
+            t.result()
     except Exception as e:
         print(f"[{mid}] error: {e}")
         meetings[mid]["state"] = "error"

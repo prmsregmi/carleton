@@ -38,8 +38,16 @@ class SessionState:
         # Background verification tasks still in flight; drained before scorecard.
         self.pending_verifications: list = []
 
-    async def drain_verifications(self, timeout: float = 10.0) -> None:
-        """Let in-flight background verifications finish recording before hangup."""
+    async def drain_verifications(self, timeout: float | None = None) -> None:
+        """Let in-flight background verifications finish recording before hangup.
+
+        Defaults to verify_timeout_secs + 2 s so we never cut off a verification
+        that is still within its own deadline (the old 10 s hard-code was shorter
+        than the default 20 s verify timeout, silently discarding late verdicts).
+        """
+        if timeout is None:
+            from app.config import get_settings
+            timeout = get_settings().verify_timeout_secs + 2.0
         import asyncio
 
         pending = [t for t in self.pending_verifications if not t.done()]

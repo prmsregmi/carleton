@@ -32,7 +32,7 @@ type WsEvent =
   | { type: "meetings"; meetings: Omit<Meeting, "transcript" | "actions" | "statusHistory">[] }
   | { type: "status";     meeting_id: string; message: string; state: BotState }
   | { type: "transcript"; meeting_id: string; text: string }
-  | { type: "action";     meeting_id: string; label: string; detail: string };
+  | { type: "assistant";  meeting_id: string; text: string };
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
 
@@ -666,12 +666,12 @@ export default function Home() {
           addEvent({ meeting_id: mid, kind: "transcript", text: ev.text });
         }
 
-        if (ev.type === "action") {
+        if (ev.type === "assistant") {
           setMeetings((prev) => {
             const m = prev[mid]; if (!m) return prev;
-            return { ...prev, [mid]: { ...m, actions: [...m.actions, { label: ev.label, detail: ev.detail }] } };
+            return { ...prev, [mid]: { ...m, actions: [...m.actions, { label: ev.text, detail: "" }] } };
           });
-          addEvent({ meeting_id: mid, kind: "action", text: ev.label, detail: ev.detail });
+          addEvent({ meeting_id: mid, kind: "action", text: ev.text });
         }
       };
 

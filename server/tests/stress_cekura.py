@@ -193,19 +193,20 @@ async def main() -> None:
 
     wall_ms = (time.perf_counter() - wall_start) * 1000
 
-    ok = [r for r in results if r["submitted"] or DRY_RUN]
+    ok = [r for r in results if r["submitted"]]
     fail = [r for r in results if not r["submitted"] and not DRY_RUN]
 
     print("\n" + "=" * 64)
     print(f"  Cekura stress test — {NUM_AGENTS} agents")
     print("=" * 64)
     print(f"  Wall time:   {wall_ms:.0f} ms")
-    print(f"  Submitted:   {len(ok)}/{NUM_AGENTS}")
+    mode = "DRY RUN — nothing sent" if DRY_RUN else f"{len(ok)}/{NUM_AGENTS} submitted"
+    print(f"  Result:      {mode}")
     print(f"  Failed:      {len(fail)}")
     print()
 
     for r in results:
-        status = "✓" if (r["submitted"] or DRY_RUN) else "✗"
+        status = "~" if DRY_RUN else ("✓" if r["submitted"] else "✗")
         print(
             f"  {status} [{r['index']:02d}] {r['name']:<20} "
             f"{r['verdict']:<15} call={r['call_id']}  "

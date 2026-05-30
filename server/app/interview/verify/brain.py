@@ -172,10 +172,12 @@ async def _stub_verification(vin: VerifyClaimInput) -> Verdict:
 
 async def run_verification(vin: VerifyClaimInput) -> Verdict:
     settings = get_settings()
-    have_creds = bool(
-        settings.scrapingdog_api_key or settings.github_token or settings.anthropic_api_key
-    )
-    if not have_creds:
+    # Only the external data-source keys gate real verification; the Anthropic key
+    # is always present (it powers the voice LLM too) and must not count here —
+    # otherwise the agent runs but immediately errors because ScrapingDog/GitHub
+    # calls fail, burning the full 20-second verify timeout on every claim.
+    have_data_creds = bool(settings.scrapingdog_api_key or settings.github_token)
+    if not have_data_creds:
         return await _stub_verification(vin)
     try:
         return await _agent_verification(vin)

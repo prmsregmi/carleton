@@ -187,4 +187,10 @@ async def join_meet(
 
                 await asyncio.sleep(0.05)
         finally:
+            # Close the browser before deleting the profile dir; if we rmtree
+            # first while Chrome is still running it leaks a zombie process.
+            try:
+                await context.close()
+            except Exception:
+                pass
             shutil.rmtree(profile_dir, ignore_errors=True)

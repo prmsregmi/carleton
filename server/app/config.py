@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     slack_mcp_token: str | None = None
     gmail_mcp_url: str | None = None
     gmail_mcp_token: str | None = None
+    linear_mcp_url: str | None = None
+    linear_mcp_token: str | None = None
+    google_drive_mcp_url: str | None = None
+    google_drive_mcp_token: str | None = None
 
     @property
     def wake_names(self) -> list[str]:

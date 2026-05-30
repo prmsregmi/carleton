@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.config import get_settings
+from app.meeting.brain import get_active_mcps, set_dynamic_mcps, remove_dynamic_mcp
 
 app = FastAPI()
 
@@ -127,6 +128,36 @@ async def run_tasks(mid: str):
     meetings[mid]["extraction"] = data
     await broadcast({"type": "extraction", "meeting_id": mid, "extraction": data})
     return {"ran": len(results), "results": [{"task": t, "result": r} for t, r in results]}
+
+
+# ── MCP management ─────────────────────────────────────────────────────────────
+
+
+class McpUpsertRequest(BaseModel):
+    name: str
+    label: str = ""
+    url: str
+    token: str
+
+
+@app.get("/api/mcps")
+async def list_mcps():
+    return get_active_mcps()
+
+
+@app.post("/api/mcps")
+async def upsert_mcp(req: McpUpsertRequest):
+    set_dynamic_mcps([{"name": req.name, "label": req.label or req.name, "url": req.url, "token": req.token}])
+    return {"ok": True}
+
+
+@app.delete("/api/mcps/{name}")
+async def delete_mcp(name: str):
+    removed = remove_dynamic_mcp(name)
+    if not removed:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Cannot remove builtin MCP or not found")
+    return {"ok": True}
 
 
 @app.websocket("/ws")

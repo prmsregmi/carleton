@@ -24,9 +24,10 @@ from app.config import Settings, get_settings
 
 MEETING_SYSTEM = """You are a voice assistant participating in a live meeting. A
 participant has just addressed you by name and asked you to do something. Carry
-out the request using the available tools (Jira, Slack, Gmail) and then reply
-with ONE short sentence, in plain spoken English, stating exactly what you did
-(include the created ticket key, channel, or recipient when relevant).
+out the request using the available tools (Jira, Slack, Gmail, Linear, Google
+Drive) and then reply with ONE short sentence, in plain spoken English, stating
+exactly what you did (include the created ticket key, channel, or recipient when
+relevant).
 
 Rules:
 - Act immediately; do not ask follow-up questions unless the request is
@@ -34,6 +35,10 @@ Rules:
 - Be literal about what you did. If you could not do it, say so plainly.
 - No markdown, no lists, no emojis — your reply is spoken aloud.
 - Keep it under 25 words."""
+
+# Runtime-only dynamic MCP servers added via the UI (not persisted to env).
+# Maps name → {"url": str, "token": str}
+_dynamic_mcps: dict[str, dict] = {}
 
 
 def _mcp_servers(settings: Settings) -> dict:
@@ -43,6 +48,8 @@ def _mcp_servers(settings: Settings) -> dict:
         ("jira", settings.jira_mcp_url, settings.jira_mcp_token),
         ("slack", settings.slack_mcp_url, settings.slack_mcp_token),
         ("gmail", settings.gmail_mcp_url, settings.gmail_mcp_token),
+        ("linear", settings.linear_mcp_url, settings.linear_mcp_token),
+        ("google_drive", settings.google_drive_mcp_url, settings.google_drive_mcp_token),
     ]
     for name, url, token in specs:
         if url and token:
@@ -51,7 +58,78 @@ def _mcp_servers(settings: Settings) -> dict:
                 "url": url,
                 "headers": {"Authorization": f"Bearer {token}"},
             }
+    # Merge in runtime-dynamic servers (UI-added), overriding builtins if same name.
+    for name, cfg in _dynamic_mcps.items():
+        servers[name] = {
+            "type": "http",
+            "url": cfg["url"],
+            "headers": {"Authorization": f"Bearer {cfg['token']}"},
+        }
     return servers
+
+
+_BUILTIN_NAMES = {"jira", "slack", "gmail", "linear", "google_drive"}
+
+_BUILTIN_LABELS = {
+    "jira": "Jira",
+    "slack": "Slack",
+    "gmail": "Gmail",
+    "linear": "Linear",
+    "google_drive": "Google Drive",
+}
+
+
+def get_active_mcps() -> list[dict]:
+    """Return all MCP servers (builtin + dynamic) with connection status."""
+    settings = get_settings()
+    builtin_specs = [
+        ("jira", settings.jira_mcp_url, settings.jira_mcp_token),
+        ("slack", settings.slack_mcp_url, settings.slack_mcp_token),
+        ("gmail", settings.gmail_mcp_url, settings.gmail_mcp_token),
+        ("linear", settings.linear_mcp_url, settings.linear_mcp_token),
+        ("google_drive", settings.google_drive_mcp_url, settings.google_drive_mcp_token),
+    ]
+    result = []
+    for name, url, token in builtin_specs:
+        connected = bool(url and token) or name in _dynamic_mcps
+        result.append({
+            "name": name,
+            "label": _BUILTIN_LABELS.get(name, name),
+            "connected": connected,
+            "builtin": True,
+        })
+    for name, cfg in _dynamic_mcps.items():
+        if name not in _BUILTIN_NAMES:
+            result.append({
+                "name": name,
+                "label": cfg.get("label", name),
+                "connected": True,
+                "builtin": False,
+            })
+    return result
+
+
+def set_dynamic_mcps(mcps: list[dict]) -> None:
+    """Accept a list of {"name": str, "url": str, "token": str, "label"?: str}
+    and store them in the runtime dict. For builtin names this updates the
+    runtime URL/token; for new names this adds a custom server."""
+    global _dynamic_mcps
+    for mcp in mcps:
+        name = mcp.get("name", "").strip()
+        if not name:
+            continue
+        _dynamic_mcps[name] = {
+            "url": mcp.get("url", ""),
+            "token": mcp.get("token", ""),
+            "label": mcp.get("label", name),
+        }
+
+
+def remove_dynamic_mcp(name: str) -> bool:
+    """Remove a custom (non-builtin) MCP server. Returns True if removed."""
+    if name in _BUILTIN_NAMES:
+        return False
+    return _dynamic_mcps.pop(name, None) is not None
 
 
 async def handle_request(request: str, transcript: str) -> str:

@@ -145,11 +145,57 @@ runs on your laptop runs in the cloud — your machine is never in the call path
 
 ---
 
+## Meet Bot (Aria)
+
+Aria is a web app that sends a bot into a Google Meet. The bot joins as a guest, captures the audio, and pipes it into the ginjoly pipeline.
+
+### How to run
+
+**1. Add your API key**
+
+```bash
+cd meet_backend
+cp .env.example .env
+# open .env and add your ANTHROPIC_API_KEY
+```
+
+**2. Install dependencies**
+
+```bash
+cd meet_backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+```
+
+**3. Start the backend**
+
+```bash
+cd meet_backend
+source venv/bin/activate
+python main.py
+```
+
+**4. Start the frontend**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**5. Open [http://localhost:3000](http://localhost:3000)**
+
+Paste a Google Meet link → click **Join meeting** → a Chrome window opens and the bot joins as **"Aria Notetaker"** → admit it from Meet's waiting room → transcript appears live on the page.
+
+---
+
 ## Project layout
 
 ```
 ginjoly/
-├── server/                      # the agent
+├── server/                      # the agent (pipeline)
 │   ├── bot.py                   # pipeline assembly + transport entry point
 │   ├── app/
 │   │   ├── flow.py              # the 3-node conversation graph
@@ -161,7 +207,17 @@ ginjoly/
 │   │   └── services/            # Nemotron STT + vLLM LLM adapters
 │   ├── Dockerfile               # Pipecat Cloud image
 │   └── pcc-deploy.toml          # Pipecat Cloud deploy config
-├── client/                      # optional browser client (Vite)
+├── meet_backend/                # Aria — Meet bot + API server
+│   ├── main.py                  # FastAPI server (POST /api/join, WebSocket /ws)
+│   ├── pipeline_bridge.py       # bridges Meet audio into the ginjoly pipeline
+│   ├── agent/
+│   │   └── meet_bot.py          # Playwright bot that joins Google Meet as a guest
+│   └── static/
+│       └── audio_worklet.js     # captures audio inside the Meet page
+├── frontend/                    # Aria web UI (Next.js)
+│   └── app/
+│       └── page.tsx             # paste link → live transcript + status + actions
+├── client/                      # original browser client (Vite)
 ├── LICENSE                      # Apache-2.0
 └── README.md
 ```

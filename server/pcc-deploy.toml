@@ -1,0 +1,8 @@
+agent_name = "ginjoly"
+# Replace with your pushed image ref (docker registry user + tag).
+image = "yourusername/ginjoly:0.1"
+secret_set = "ginjoly-secrets"
+agent_profile = "agent-1x"
+
+[scaling]
+	min_agents = 1

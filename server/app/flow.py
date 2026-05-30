@@ -1,9 +1,12 @@
 """Conversation flow: collect_anchors -> questioning -> close.
 
 The plan's separate "intro" stage is folded into the initial collect_anchors
-node — its greeting is the node's `tts_say` pre-action — to avoid a fragile
-no-input auto-transition. Each node is built from the session's Context, so the
-same graph drives any screening type.
+node. The greeting is spoken from bot.py *after* flow_manager.initialize()
+completes, not as a node pre-action: a pre-action greeting runs inside
+_set_node before the system prompt and tools are applied, so a caller who
+interrupts the greeting cancels node setup and the LLM runs unconfigured.
+Each node is built from the session's Context, so the same graph drives any
+screening type.
 
 Prompt architecture note: the binding behaviour (stay in role, be terse, and —
 critically — CALL THE TOOLS) lives in each node's ``role_message``, because
@@ -104,7 +107,6 @@ def make_collect_anchors_node(session: SessionState) -> NodeConfig:
                 ),
             }
         ],
-        pre_actions=[{"type": "tts_say", "text": ctx.intro_script}],
         functions=[record_anchors_schema],
         respond_immediately=False,  # wait for the caller to answer the greeting
     )

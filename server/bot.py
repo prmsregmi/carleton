@@ -22,6 +22,7 @@ Run on Daily:                     uv run bot.py -t daily
 from dotenv import load_dotenv
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -141,8 +142,13 @@ async def run_bot(transport: BaseTransport):
 
     @task.rtvi.event_handler("on_client_ready")
     async def on_client_ready(rtvi):
-        # Start the flow once the client can receive audio (greeting plays here).
+        # Initialize the flow FIRST so the node's system prompt + tools are applied,
+        # then speak the greeting as a separate TTS frame. Speaking it inside the
+        # node (as a tts_say pre-action) runs it before setup completes, so a caller
+        # who interrupts the greeting cancels node setup and the LLM runs with no
+        # system prompt or tools.
         await flow_manager.initialize(make_collect_anchors_node(session))
+        await task.queue_frames([TTSSpeakFrame(session.context.intro_script)])
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):

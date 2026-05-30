@@ -38,7 +38,7 @@ def build_meeting_pipeline(
     the bot's replies. Leave them None for a headless run.
     """
     settings = get_settings()
-    session = MeetingSessionState(transcript_window=settings.meeting_transcript_window)
+    session = MeetingSessionState(tail_cap=settings.meeting_tail_max_lines)
 
     stt = build_stt(settings)
     tts = CartesiaTTSService(
@@ -55,6 +55,7 @@ def build_meeting_pipeline(
         settings.wake_names,
         speak_ack=settings.meeting_speak_ack,
         self_echo_filter=settings.meeting_self_echo_filter,
+        summary_interval=settings.meeting_summary_interval_secs,
         on_transcript=on_transcript,
         on_assistant=on_assistant,
     )

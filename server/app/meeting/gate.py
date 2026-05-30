@@ -20,6 +20,7 @@ from pipecat.frames.frames import (
     EndFrame,
     Frame,
     InterimTranscriptionFrame,
+    StartFrame,
     TranscriptionFrame,
     TTSSpeakFrame,
 )
@@ -27,6 +28,7 @@ from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from app.meeting.brain import handle_request
 from app.meeting.session import MeetingSessionState
+from app.meeting.summarizer import summarize
 
 _ECHO_RATIO = 0.8
 _STRIP = " ,.:;-—!?"
@@ -43,6 +45,7 @@ class WakeNameGate(FrameProcessor):
         *,
         speak_ack: bool = True,
         self_echo_filter: bool = True,
+        summary_interval: float = 0.0,
         on_transcript=None,
         on_assistant=None,
         **kwargs,
@@ -52,12 +55,16 @@ class WakeNameGate(FrameProcessor):
         self._wake_names = [w.lower() for w in wake_names]
         self._speak_ack = speak_ack
         self._self_echo_filter = self_echo_filter
+        # >0 enables the rolling summarizer loop (folds the tail into the running
+        # summary every `summary_interval` seconds); 0 keeps the raw tail only.
+        self._summary_interval = summary_interval
         # Optional async callbacks to surface activity to a UI (the meeting
         # frontend): on_transcript(text) per final line, on_assistant(text) for
         # the bot's reply. Both no-op when None.
         self._on_transcript = on_transcript
         self._on_assistant = on_assistant
         self._bg_tasks: set[asyncio.Task] = set()
+        self._summary_task: asyncio.Task | None = None
 
     def _request_after_wake(self, text: str) -> str | None:
         """Return the request when the utterance is ADDRESSED to the bot.
@@ -89,6 +96,14 @@ class WakeNameGate(FrameProcessor):
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
+
+        # Start the rolling summarizer once the pipeline is live. Framework-managed
+        # task (create_task) so Pipecat tracks and tears it down with the worker.
+        if isinstance(frame, StartFrame):
+            if self._summary_interval > 0 and self._summary_task is None:
+                self._summary_task = self.create_task(self._summary_loop())
+            await self.push_frame(frame, direction)
+            return
 
         # Pipeline is ending: cancel any in-flight brain task so it can't push a
         # frame into a dead pipeline (or keep the SDK subprocess burning tokens).
@@ -123,10 +138,30 @@ class WakeNameGate(FrameProcessor):
         # forwarding it here causes no feedback loop.
         await self.push_frame(frame, direction)
 
+    async def _summary_loop(self) -> None:
+        """Periodically fold the un-summarized tail into the running summary.
+
+        Off the voice path: a cheap Haiku call (or keyless stub) compresses only
+        the NEW lines plus the prior summary, so the brain later reads a short
+        summary + fresh tail instead of the whole transcript. Snapshot the line
+        count BEFORE summarizing so lines arriving mid-call are never dropped.
+        """
+        while True:
+            await asyncio.sleep(self._summary_interval)
+            new_lines, count = self._session.take_unsummarized()
+            if count == 0:
+                continue
+            updated = await summarize(new_lines, self._session.running_summary)
+            if updated is None:
+                # Summary failed; keep the lines in the tail and retry next tick.
+                continue
+            self._session.apply_summary(updated, count)
+            logger.debug(f"meeting summary updated from {count} line(s)")
+
     async def _dispatch(self, request: str) -> None:
         if self._speak_ack:
             await self._speak("On it.")
-        transcript = self._session.recent_transcript()
+        transcript = self._session.context_for_brain()
 
         async def _run():
             try:
@@ -156,9 +191,18 @@ class WakeNameGate(FrameProcessor):
     def _cancel_bg_tasks(self) -> None:
         for task in list(self._bg_tasks):
             task.cancel()
+        # Best-effort stop on the End/Cancel fast path (sync context); cleanup()
+        # does the awaited teardown below.
+        if self._summary_task is not None:
+            self._summary_task.cancel()
 
     async def cleanup(self):
         self._cancel_bg_tasks()
+        # Authoritative teardown: await the framework cancel so an in-flight
+        # summarize() HTTP call is actually torn down before the processor goes.
+        if self._summary_task is not None:
+            await self.cancel_task(self._summary_task)
+            self._summary_task = None
         await super().cleanup()
 
     async def _speak(self, text: str) -> None:

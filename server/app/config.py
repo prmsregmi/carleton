@@ -76,8 +76,15 @@ class Settings(BaseSettings):
     meeting_sample_rate: int = 16000
     # Speak a short ack ("On it.") while the MCP task runs in the background.
     meeting_speak_ack: bool = True
-    # Lines of recent transcript handed to the brain for "what we just discussed".
-    meeting_transcript_window: int = 12
+    # Safety cap on un-summarized transcript lines held as the tail (the rolling
+    # summarizer normally drains these well before the cap is reached; oldest are
+    # dropped with a warning only if it falls behind).
+    meeting_tail_max_lines: int = 200
+    # Rolling-summary memory: a cheap Haiku call folds the tail into a running
+    # summary on this interval, so the brain gets summary + fresh tail instead of
+    # the whole transcript. Set the interval to 0 to disable and use the raw tail.
+    meeting_summary_interval_secs: float = 300.0
+    meeting_summary_model: str = "claude-haiku-4-5"
     # Discard transcriptions that echo the bot's own recent speech (mixed stream
     # re-captures injected TTS). Backstop; the bridge should also mute on playback.
     meeting_self_echo_filter: bool = True

@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     # --- Meeting task agent (second app; shares transport/STT/TTS) ---
     # The bot listens passively in a meeting and only acts when addressed by one
     # of these wake names. Comma-separated in the env; parsed via wake_names.
-    meeting_wake_names: str = "ginjoly,ginny"
+    meeting_wake_names: str = "onion"
     meeting_ws_host: str = "0.0.0.0"
     meeting_ws_port: int = 7861
     # Mixed Google-Meet audio arrives as raw 16-bit PCM at this rate (mono);

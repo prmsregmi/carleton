@@ -65,6 +65,41 @@ class PersonDelta(BaseModel):
     new_projects: list[str] = Field(default_factory=list)  # surface strings
 
 
+class PersonBrief(BaseModel):
+    """What the extractor is told about one attendee — the 'user node' it
+    personalizes against. Drawn from that person's existing Person node."""
+
+    slug: str
+    name: str
+    email: str | None = None
+    role: str | None = None
+    expertise: list[str] = Field(default_factory=list)
+    responsibilities: list[str] = Field(default_factory=list)
+    current_projects: list[str] = Field(default_factory=list)  # project slugs
+
+
+class ProjectBrief(BaseModel):
+    """An existing project the extractor should reuse rather than re-create."""
+
+    slug: str
+    name: str
+    aliases: list[str] = Field(default_factory=list)
+
+
+class ExtractionContext(BaseModel):
+    """The conditioning handed to the brain alongside the transcript: who was in
+    the room (with their personal models) and what already exists in the graph.
+
+    This is what 'extract according to the user node and meeting context' means —
+    the brain attributes tasks to known people, enriches their Person notes, and
+    resolves mentions to EXISTING slugs instead of spawning duplicates."""
+
+    meeting_title: str | None = None
+    held_on: str | None = None  # ISO date; kept as string to stay transport-simple
+    attendees: list[PersonBrief] = Field(default_factory=list)
+    known_projects: list[ProjectBrief] = Field(default_factory=list)
+
+
 class ExtractionResult(BaseModel):
     """The extraction brain's complete, strict-JSON output for one meeting."""
 

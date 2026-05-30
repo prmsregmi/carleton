@@ -702,41 +702,6 @@ function McpPanel() {
 
 // ── Empty / landing ────────────────────────────────────────────────────────────
 
-function EmptyState({ onJoin }: { onJoin: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-57px)] px-6 text-center">
-      <div className="max-w-md">
-        <div className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-full px-3.5 py-1.5 mb-8">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-[12px] text-zinc-400 font-medium">Works with Google Meet · No account needed</span>
-        </div>
-        <h1 className="text-[32px] font-semibold text-white leading-tight tracking-tight">
-          Your AI in every meeting.<br />
-          <span className="text-zinc-500">Zero effort on your part.</span>
-        </h1>
-        <p className="mt-4 text-[15px] text-zinc-500 leading-relaxed">
-          Paste a meeting link. Aria joins, listens, and handles the work — tickets, summaries, follow-ups — while the conversation keeps moving.
-        </p>
-        <button onClick={onJoin} className="mt-8 h-11 px-6 bg-white text-black text-[14px] font-semibold rounded-xl hover:bg-zinc-100 transition-colors">
-          Add Aria to a meeting
-        </button>
-        <div className="mt-10 grid grid-cols-3 gap-px bg-white/[0.06] rounded-2xl overflow-hidden border border-white/[0.06]">
-          {[
-            { stat: "< 10s", label: "to join any meeting" },
-            { stat: "Live",  label: "transcript as it happens" },
-            { stat: "0",     label: "setup required" },
-          ].map((item) => (
-            <div key={item.label} className="bg-[#0f0f12] px-4 py-5">
-              <div className="text-[22px] font-bold text-white">{item.stat}</div>
-              <div className="text-[11px] text-zinc-600 mt-1 leading-tight">{item.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Dashboard ──────────────────────────────────────────────────────────────────
 
 function Dashboard({ meetings, events, onSelect, onJoin }: {
@@ -745,99 +710,84 @@ function Dashboard({ meetings, events, onSelect, onJoin }: {
   onSelect: (id: string) => void;
   onJoin: () => void;
 }) {
-  const [tab, setTab] = useState<"meetings" | "activity" | "integrations">("meetings");
   const active = meetings.filter((m) => ["live", "joining", "waiting"].includes(m.state));
   const past   = meetings.filter((m) => ["ended", "error"].includes(m.state));
-  const meetingsMap = Object.fromEntries(meetings.map((m) => [m.meeting_id, m]));
 
   return (
     <div className="min-h-screen bg-[#09090e]">
       {/* Nav */}
       <header className="border-b border-white/[0.06] h-14 flex items-center justify-between px-6">
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="black">
-                <path d="M12 2a3 3 0 0 1 3 3v4a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
-                <path d="M19 10a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V21H8v2h8v-2h-3v-2.06A9 9 0 0 0 21 10h-2z"/>
-              </svg>
-            </div>
-            <span className="text-[14px] font-semibold text-white">Aria</span>
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-white flex items-center justify-center">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="black">
+              <path d="M12 2a3 3 0 0 1 3 3v4a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+              <path d="M19 10a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V21H8v2h8v-2h-3v-2.06A9 9 0 0 0 21 10h-2z"/>
+            </svg>
           </div>
-
-          <div className="flex items-center gap-1 bg-white/[0.04] border border-white/[0.07] rounded-lg p-1">
-            {(["meetings", "activity", "integrations"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-3 py-1.5 text-[12px] font-medium rounded-md capitalize transition-colors ${
-                  tab === t ? "bg-white/[0.08] text-white" : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                {t}
-                {t === "activity" && events.length > 0 && (
-                  <span className="ml-1.5 text-zinc-600 tabular-nums">{events.length}</span>
-                )}
-              </button>
-            ))}
-          </div>
+          <span className="text-[14px] font-semibold text-white">Aria</span>
         </div>
-
         <button onClick={onJoin} className="h-8 px-4 bg-white text-black text-[13px] font-semibold rounded-lg hover:bg-zinc-100 transition-colors">
           + Add to meeting
         </button>
       </header>
 
-      {/* Content */}
-      {tab === "integrations" ? (
-        <McpPanel />
-      ) : meetings.length === 0 ? (
-        <EmptyState onJoin={onJoin} />
-      ) : tab === "meetings" ? (
-        <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-          {active.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2.5 mb-4">
-                <span className="text-[12px] font-medium text-zinc-500 uppercase tracking-wider">Active</span>
-                <span className="text-[12px] text-zinc-700">{active.length}</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {/* Two-column layout: bots left, integrations right — always visible */}
+      <div className="max-w-6xl mx-auto px-6 py-8 flex gap-8 items-start">
+
+        {/* Left — bots */}
+        <div className="flex-1 min-w-0 space-y-8">
+
+          <section>
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="text-[12px] font-medium text-zinc-500 uppercase tracking-wider">Active bots</span>
+              {active.length > 0 && (
+                <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {active.length} live
+                </span>
+              )}
+            </div>
+
+            {active.length === 0 ? (
+              <button
+                onClick={onJoin}
+                className="w-full border border-dashed border-white/[0.08] rounded-2xl p-8 flex flex-col items-center gap-3 text-center hover:border-white/20 hover:bg-white/[0.02] transition-all"
+              >
+                <div className="w-10 h-10 rounded-full border border-white/[0.08] flex items-center justify-center text-zinc-600 text-xl">+</div>
+                <div>
+                  <p className="text-[14px] font-medium text-zinc-400">No bots running</p>
+                  <p className="text-[12px] text-zinc-700 mt-0.5">Add Aria to a Google Meet</p>
+                </div>
+              </button>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {active.map((m) => <MeetingCard key={m.meeting_id} meeting={m} onClick={() => onSelect(m.meeting_id)} />)}
               </div>
-            </section>
-          )}
+            )}
+          </section>
+
           {past.length > 0 && (
             <section>
               <div className="flex items-center gap-2.5 mb-4">
                 <span className="text-[12px] font-medium text-zinc-500 uppercase tracking-wider">Past</span>
                 <span className="text-[12px] text-zinc-700">{past.length}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {past.map((m) => <MeetingCard key={m.meeting_id} meeting={m} onClick={() => onSelect(m.meeting_id)} />)}
               </div>
             </section>
           )}
-        </main>
-      ) : (
-        /* Global activity feed */
-        <div className="max-w-4xl mx-auto">
-          <div className="px-6 py-5 border-b border-white/[0.05] flex items-center justify-between">
-            <div>
-              <h2 className="text-[14px] font-semibold text-white">All activity</h2>
-              <p className="text-[12px] text-zinc-600 mt-0.5">Every event from every bot, in real time</p>
-            </div>
-            <div className="flex items-center gap-3">
-              {meetings.filter(m => m.state === "live").length > 0 && (
-                <div className="flex items-center gap-1.5 text-[12px] text-zinc-500">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  {meetings.filter(m => m.state === "live").length} live
-                </div>
-              )}
-            </div>
-          </div>
-          <ActivityFeed events={events} meetings={meetingsMap} onSelectMeeting={onSelect} />
         </div>
-      )}
+
+        {/* Right — integrations panel, always visible */}
+        <div className="w-80 shrink-0">
+          <div className="flex items-center gap-2.5 mb-4">
+            <span className="text-[12px] font-medium text-zinc-500 uppercase tracking-wider">Integrations</span>
+          </div>
+          <McpPanel />
+        </div>
+
+      </div>
     </div>
   );
 }

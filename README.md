@@ -4,7 +4,9 @@ You walk out of a two-hour call and can remember maybe the last three things sai
 
 **Carleton sits in the call and does the remembering for you.** It listens the entire time, builds a live structured understanding of what's happening, and — the part that matters — **acts on it**: files the ticket, sends the email, drafts the doc. The moment someone asks, or in one batch at the end. And every meeting makes it smarter about how your team works.
 
-**Video demo (< 60s):** https://youtu.be/XdPGX2aY5UA
+**Video demo (< 60s):**
+
+[![Watch the Carleton demo](https://img.youtube.com/vi/XdPGX2aY5UA/hqdefault.jpg)](https://youtu.be/XdPGX2aY5UA)
 
 ---
 
@@ -56,7 +58,7 @@ We authored a **30-scenario test suite in Cekura**, run through its hosted **Pip
 3. **Underspecified requests** — missing a required field; it must ask for exactly what it needs.
 4. **Impossible requests** — unsupported actions; it must decline plainly.
 
-Cekura drives each conversation end-to-end and scores the transcripts, giving per-dimension signal instead of anecdotes. The suite surfaced the expected failure mode — reacting to its name mid-sentence — which we closed by hardening the `WakeNameGate` (leading-filler tolerance, strict first-token addressing so mid-sentence mentions can't trigger, self-echo suppression). On the re-run, false triggers dropped to zero while addressed-request and tool-selection coverage held. The result is a repeatable regression suite, not a one-time check.
+Cekura drives each conversation end-to-end and scores the transcripts, giving per-dimension signal instead of anecdotes. The suite targets the failure mode that matters most — the agent reacting to its name mid-sentence — and drove the hardening of the `WakeNameGate`: leading-filler tolerance, strict first-token addressing so mid-sentence mentions can't trigger, and self-echo suppression. Because the scenarios are defined once and replayed on demand, it's a repeatable regression suite rather than a one-time check.
 
 ---
 
